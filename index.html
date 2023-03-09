@@ -1,107 +1,140 @@
 <!doctype html>
 <html>
     <head>
+        <style>
+            body {
+                margin: 0px;
+                background-color: #000000;
+            }
+            #game {
+                position: absolute;
+                width: 55vmin; height: 55vmin;
+                top: 50%; left: 50%;
+                transform: translate(-50%, -50%);
+                border-radius: 2vmin;
+                background-color: #050505;
+            }
+            #score {
+                position: absolute;
+                bottom: 10%; left: 50%;
+                transform: translate(-50%, -50%);
+                color: #ffffff;
+                font-size: 3vmin; font-family: 'monospace';
+            }
+        </style>
+        <script>
+            function displayScore(score) {
+                document.getElementById("score").innerText = score + "";
+            }
+        </script>
         <script src="currant.js"></script>
         <currant-script src="blueberry.crn"></currant-script>
         <currant-script>
 
+            displayScore: fun = f@displayScore; // import "displayScore" from Javascript
+
+            // get canvas and keyboard
             canvas: Surface = CanvasSurface("game");
             keyboard: Keyboard = DocumentKeyboard();
 
-            SnakeSegment: type = $(x: u8, y: u8, mx: i8, my: i8) {};
+            // create a buffer to render the game to
+            buffer: Surface = SizedSurface(canvas.width(), canvas.height());
+
+
+            SnakeSegment: type = $(x: u8, y: u8) {};
             snake: arr = [SnakeSegment: 0u64: none];
 
             tiles: u8 = 16u8;
             tickDelta: f32 = 0f32;
 
-            snakeMX: i8 = 0i8;
+            // stores the movement of the snake
+            snakeMX: i8 = 1i8;
             snakeMY: i8 = 0i8;
+            snakeInputX: i8 = 1i8;
+            snakeInputY: i8 = 0i8;
 
             appleX: u8 = 0u8;
             appleY: u8 = 0u8;
 
+
             reset: fun = {
                 snake = [SnakeSegment:
-                    SnakeSegment(0u8, 0u8, 1i8, 0i8),
-                    SnakeSegment(0u8, 0u8, 0i8, 0i8),
-                    SnakeSegment(0u8, 0u8, 0i8, 0i8)
+                    SnakeSegment(0u8, 0u8),
+                    SnakeSegment(0u8, 0u8),
+                    SnakeSegment(0u8, 0u8)
                 ];
-                snakeMX = 0i8;
+                snakeMX = 1i8;
                 snakeMY = 0i8;
-                setApple();
+                snakeInputX = 1i8;
+                snakeInputY = 0i8;
+                moveApple();
+                displayScore(len(snake));
             };
 
-            setApple: fun = {
+            moveApple: fun = {
                 appleX = u8~(Math.random() * f64~tiles);
                 appleY = u8~(Math.random() * f64~tiles);
             };
 
+
             reset();
 
+
             Gameloop.start({
-                tileS: f32 = f32~canvas.width() / f32~tiles;
-
-                canvas.clear( 220u8, 220u8, 220u8, 255u8 );
-
-                for(snake, (segment: SnakeSegment) -> lpa {
-                    canvas.drawRect(
-                        25u8, 255u8, 25u8, 255u8,
-                        f32~segment.x * tileS, f32~segment.y * tileS,
-                        tileS, tileS,
-                        Transform()
-                    );
-                    -> cont;
-                });
-                canvas.drawOval(
-                    0u8, 220u8, 0u8, 255u8,
-                    f32~snake[0u64].x * tileS, f32~snake[0u64].y * tileS,
-                    tileS, tileS,
-                    Transform()
-                );
-
-                canvas.drawOval(
-                    255u8, 25u8, 25u8, 255u8,
-                    f32~appleX * tileS, f32~appleY * tileS,
-                    tileS, tileS,
-                    Transform()
-                );
-
-                if(keyboard.pressing(LeftArrowKey), { snakeMX = -1i8; snakeMY = 0i8; });
-                if(keyboard.pressing(RightArrowKey), { snakeMX = 1i8; snakeMY = 0i8; });
-                if(keyboard.pressing(UpArrowKey), { snakeMX = 0i8; snakeMY = -1i8; });
-                if(keyboard.pressing(DownArrowKey), { snakeMX = 0i8; snakeMY = 1i8; });
+                receiveInput();
 
                 tickDelta = tickDelta + f32~Gameloop.deltaTime();
-                if(tickDelta >= 0.2f32, tick);
+                if(tickDelta >= 0.2f32, {
+                    tickDelta = 0f32;
+
+                    move();
+                    collide();
+                    eatApple();
+                    render();
+                });
+
+                if(buffer.width() != canvas.width() || buffer.height() != canvas.height(), {
+                    buffer = SizedSurface(canvas.width(), canvas.height());
+                    render();
+                });
+
+                canvas.drawSurface(buffer, 255u8, 0f32, 0f32, f32~canvas.width(), f32~canvas.height(), Transform());
             });
 
-            tick: fun = {
-                tickDelta = 0f32;
 
-                if(snakeMX != 0i8 - snake[0u64].mx && snakeMY != 0i8 - snake[0u64].my, {
-                    snake[0u64].mx = snakeMX;
-                    snake[0u64].my = snakeMY;
+            receiveInput: fun = {
+                if(keyboard.pressing(LeftArrowKey), { snakeInputX = -1i8; snakeInputY = 0i8; });
+                if(keyboard.pressing(RightArrowKey), { snakeInputX = 1i8; snakeInputY = 0i8; });
+                if(keyboard.pressing(UpArrowKey), { snakeInputX = 0i8; snakeInputY = -1i8; });
+                if(keyboard.pressing(DownArrowKey), { snakeInputX = 0i8; snakeInputY = 1i8; });
+            };
+
+
+            move: fun = {
+                if(snakeInputX != 0i8 - snakeMX && snakeInputY != 0i8 - snakeMY, {
+                    snakeMX = snakeInputX;
+                    snakeMY = snakeInputY;
                 });
 
-                for(range(0u64, len(snake)), (segment: u64) -> lpa {
-                    snake[segment].x = u8~(i8~snake[segment].x + snake[segment].mx) % tiles;
-                    snake[segment].y = u8~(i8~snake[segment].y + snake[segment].my) % tiles;
-                    -> cont;
-                });
                 for(Array.reverse(range(1u64, len(snake))), (segment: u64) -> lpa {
-                    snake[segment].mx = snake[segment - 1u64].mx;
-                    snake[segment].my = snake[segment - 1u64].my;
+                    snake[segment].x = snake[segment - 1u64].x;
+                    snake[segment].y = snake[segment - 1u64].y;
                     -> cont;
                 });
 
-                if(snake[0u64].x == appleX && snake[0u64].y == appleY, {
-                    setApple();
-                    snake = Array.add(snake, SnakeSegment(
-                        snake[len(snake) - 1u64].x, snake[len(snake) - 1u64].y,
-                        0i8, 0i8
-                    ));
-                });
+                snake[0u64].x = u8~(i8~snake[0u64].x + snakeMX) % tiles;
+                snake[0u64].y = u8~(i8~snake[0u64].y + snakeMY) % tiles;
+            };
 
+            eatApple: fun = {
+                if(snake[0u64].x == appleX && snake[0u64].y == appleY, {
+                    moveApple();
+                    snake = Array.add(snake, SnakeSegment(snake[len(snake) - 1u64].x, snake[len(snake) - 1u64].y));
+                    displayScore(len(snake));
+                });
+            };
+
+            collide: fun = {
                 for(range(1u64, len(snake)), (segment: u64) -> lpa {
                     if(snake[0u64].x == snake[segment].x && snake[0u64].y == snake[segment].y, ^{
                         reset();
@@ -111,9 +144,36 @@
                 });
             };
 
+
+            render: fun = {
+                tileS: f32 = f32~canvas.width() / f32~tiles;
+
+                buffer.clear( 255u8, 255u8, 255u8, 255u8 );
+
+                // draw snake body and head
+                for(snake, (segment: SnakeSegment) -> lpa {
+                    buffer.drawRect(
+                        25u8, 255u8, 25u8, 255u8,
+                        f32~segment.x * tileS, f32~segment.y * tileS, tileS, tileS, Transform()
+                    );
+                    -> cont;
+                });
+                buffer.drawOval(
+                    0u8, 220u8, 0u8, 255u8,
+                    f32~snake[0u64].x * tileS, f32~snake[0u64].y * tileS, tileS, tileS, Transform()
+                );
+
+                // draw apple
+                buffer.drawOval(
+                    255u8, 25u8, 25u8, 255u8,
+                    f32~appleX * tileS, f32~appleY * tileS, tileS, tileS, Transform()
+                );
+            };
+
         </currant-script>
     </head>
-    <body style="margin: 0px; background-color: #000000">
-        <canvas id="game" style="position: absolute; width: 500px; height: 500px; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 25px"></canvas>
+    <body>
+        <canvas id="game"></canvas>
+        <div id="score">Loading...</div>
     </body>
 </html>
